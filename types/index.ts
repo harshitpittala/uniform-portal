@@ -24,7 +24,7 @@ export interface DashboardStats {
 }
 
 export const DEPARTMENTS = [
-  'CSE', 'CSM', 'CSIT', 'IT', 'ECE', 'EEE', 'Mechanical', 'Civil', 'Other',
+  'CSE', 'CSM', 'CSD', 'IT', 'ECE', 'EEE', 'Mechanical', 'Civil', 'Other',
 ]
 
 export const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year']

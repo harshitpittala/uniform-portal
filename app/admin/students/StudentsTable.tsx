@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter, Trash2 } from 'lucide-react'
 import SignatureModal from '@/components/admin/SignatureModal'
 import ExportButtons from '@/components/admin/ExportButtons'
 import { Submission } from '@/types'
@@ -21,6 +21,8 @@ export default function StudentsTable() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selectedSig, setSelectedSig] = useState<Submission | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Submission | null>(null)
 
   const [filters, setFilters] = useState({
     search: '',
@@ -57,6 +59,24 @@ export default function StudentsTable() {
     const t = setTimeout(fetchData, 300)
     return () => clearTimeout(t)
   }, [fetchData])
+
+  async function handleDelete(submission: Submission) {
+    setDeletingId(submission.id)
+    try {
+      const res = await fetch(`/api/admin/submissions/${submission.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setData((prev) => prev.filter((r) => r.id !== submission.id))
+        setTotal((t) => t - 1)
+      } else {
+        alert('Failed to delete. Please try again.')
+      }
+    } catch {
+      alert('Network error. Please try again.')
+    } finally {
+      setDeletingId(null)
+      setConfirmDelete(null)
+    }
+  }
 
   function toggleSort(col: string) {
     setFilters((f) => ({
@@ -162,18 +182,19 @@ export default function StudentsTable() {
                   </th>
                 ))}
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Signature</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                     Loading...
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                     No records found.
                   </td>
                 </tr>
@@ -195,15 +216,22 @@ export default function StudentsTable() {
                       {format(new Date(row.created_at), 'dd MMM yyyy, hh:mm a')}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedSig(row)}
-                        className="group relative"
-                      >
+                      <button onClick={() => setSelectedSig(row)}>
                         <img
                           src={row.signature_url}
                           alt="sig"
                           className="h-10 w-24 object-contain border border-gray-200 rounded-lg bg-white p-1 hover:border-blue-400 transition-colors cursor-pointer"
                         />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setConfirmDelete(row)}
+                        disabled={deletingId === row.id}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -247,6 +275,45 @@ export default function StudentsTable() {
           rollNumber={selectedSig.roll_number}
           onClose={() => setSelectedSig(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={(e) => e.target === e.currentTarget && setConfirmDelete(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 text-center mb-1">Delete Response?</h3>
+            <p className="text-sm text-gray-500 text-center mb-1">
+              <span className="font-medium text-gray-800">{confirmDelete.full_name}</span>
+            </p>
+            <p className="text-xs text-gray-400 text-center mb-6">
+              {confirmDelete.roll_number} — {confirmDelete.department} {confirmDelete.year}
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-3 text-center mb-5">
+              This will permanently delete the response and signature. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDelete)}
+                disabled={deletingId === confirmDelete.id}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deletingId === confirmDelete.id ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
