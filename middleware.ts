@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken, COOKIE_NAME } from '@/lib/auth'
+
+const COOKIE_NAME = 'admin_token'
+
+// Lightweight JWT check for Edge runtime (no jsonwebtoken)
+function isValidJwt(token: string): boolean {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return false
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -13,7 +27,7 @@ export function middleware(req: NextRequest) {
 
   if (isAdminPage || isAdminApi || isExportApi) {
     const token = req.cookies.get(COOKIE_NAME)?.value
-    if (!token || !verifyToken(token)) {
+    if (!token || !isValidJwt(token)) {
       if (isAdminPage) {
         return NextResponse.redirect(new URL('/admin/login', req.url))
       }

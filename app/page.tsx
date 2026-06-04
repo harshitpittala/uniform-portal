@@ -13,22 +13,18 @@ export default function HomePage() {
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4 py-24 text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-700/50 backdrop-blur border border-blue-500/30 rounded-full px-4 py-2 text-sm mb-6">
-            <Shield className="w-4 h-4" />
-            Official Student Representation Portal
-          </div>
-
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black mb-4 leading-tight">
-            Student Representation Portal
+            Student Representation
           </h1>
 
           <p className="text-xl sm:text-2xl font-semibold text-blue-200 mb-4">
-            Review of the New Uniform Policy
+            Student Feedback on the Uniform Policy
           </p>
 
           <p className="text-blue-100 text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed">
-            This portal has been created to collect student acknowledgments and digital signatures
-            regarding the recently introduced compulsory uniform policy.
+            This initiative has been created to collect student opinions, concerns, and digital
+            signatures regarding the recently introduced uniform policy. The responses will be
+            respectfully compiled and presented to the college administration for consideration.
           </p>
 
           <Link
@@ -36,7 +32,7 @@ export default function HomePage() {
             className="inline-flex items-center gap-2 bg-white text-blue-900 font-bold text-lg px-8 py-4 rounded-2xl hover:bg-blue-50 transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5"
           >
             <PenLine className="w-5 h-5" />
-            Sign the Representation
+            Submit Your Representation
           </Link>
         </div>
       </section>
@@ -79,7 +75,7 @@ export default function HomePage() {
             className="inline-flex items-center gap-2 bg-white text-blue-900 font-bold text-lg px-8 py-4 rounded-2xl hover:bg-blue-50 transition-all"
           >
             <PenLine className="w-5 h-5" />
-            Sign the Representation
+            Submit Your Representation
           </Link>
         </div>
       </section>
