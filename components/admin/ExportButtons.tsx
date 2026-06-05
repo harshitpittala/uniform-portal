@@ -2,6 +2,7 @@
 
 import { Download, FileText, FileSpreadsheet, Archive, Loader2 } from 'lucide-react'
 import { useState } from 'react'
+import PdfExportButton from './PdfExportButton'
 
 export default function ExportButtons() {
   const [loading, setLoading] = useState<string | null>(null)
@@ -28,10 +29,9 @@ export default function ExportButtons() {
   }
 
   const buttons = [
-    { type: 'csv', label: 'CSV', Icon: FileText, color: 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200' },
-    { type: 'excel', label: 'Excel', Icon: FileSpreadsheet, color: 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200' },
-    { type: 'pdf', label: 'PDF Report', Icon: FileText, color: 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200' },
-    { type: 'zip', label: 'Full ZIP', Icon: Archive, color: 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200' },
+    { type: 'csv',   label: 'CSV',      Icon: FileText,        color: 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200' },
+    { type: 'excel', label: 'Excel',    Icon: FileSpreadsheet, color: 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200' },
+    { type: 'zip',   label: 'Full ZIP', Icon: Archive,         color: 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200' },
   ]
 
   return (
@@ -51,6 +51,9 @@ export default function ExportButtons() {
           {loading === type ? 'Exporting...' : label}
         </button>
       ))}
+
+      {/* PDF generated in browser — no server timeout */}
+      <PdfExportButton />
     </div>
   )
 }
