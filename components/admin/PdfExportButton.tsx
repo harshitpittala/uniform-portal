@@ -22,8 +22,8 @@ async function fetchCompressedImage(url: string): Promise<string | null> {
       try {
         // Draw at fixed small size — enough to be clear in PDF
         const canvas = document.createElement('canvas')
-        canvas.width  = 300
-        canvas.height = 90
+        canvas.width  = 500
+        canvas.height = 150
         const ctx = canvas.getContext('2d')!
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -35,7 +35,7 @@ async function fetchCompressedImage(url: string): Promise<string | null> {
         const y = (canvas.height - h) / 2
         ctx.drawImage(img, x, y, w, h)
         // Export as JPEG at 60% quality — small but readable
-        resolve(canvas.toDataURL('image/jpeg', 0.6))
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
       } catch {
         resolve(null)
       }
@@ -88,15 +88,15 @@ export default function PdfExportButton() {
       const margin = 15
 
       const col = {
-        num:  margin,
-        name: margin + 10,
-        roll: margin + 58,
-        dept: margin + 93,
-        year: margin + 122,
-        sig:  margin + 148,
+        num:  margin,        // 8mm wide
+        name: margin + 8,    // 35mm wide
+        roll: margin + 43,   // 28mm wide
+        dept: margin + 71,   // 20mm wide
+        year: margin + 91,   // 20mm wide
+        sig:  margin + 111,  // rest = 210-15-111 = 84mm wide ← much bigger
       }
-      const sigColW = pageW - margin - col.sig
-      const rowH    = 22
+      const sigColW = pageW - margin - col.sig  // ~84mm
+      const rowH    = 30  // taller rows so signature is bigger
       const headerH = 8
 
       // ── Page header ──────────────────────────────────────────────────────
