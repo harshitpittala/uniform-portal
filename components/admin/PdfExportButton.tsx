@@ -82,122 +82,159 @@ export default function PdfExportButton() {
 
       // 3. Build PDF
       setProgress('Building PDF...')
-      const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageW = 210
-      const pageH = 297
+      const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageW  = 210
+      const pageH  = 297
       const margin = 15
+      const footer = 10  // space reserved at bottom for page number
+
+      // ── Layout maths ─────────────────────────────────────────────────────
+      // Data page usable height: pageH - topMargin - footer - tableHeaderH
+      // We want exactly 10 rows per data page.
+      const headerH   = 8
+      const topMargin = 15
+      const usable    = pageH - topMargin - footer - headerH  // ~264mm
+      const rowH      = Math.floor(usable / 10)               // 26mm → 10 rows/page exactly
 
       const col = {
-        num:  margin,        // 8mm wide
-        name: margin + 8,    // 35mm wide
-        roll: margin + 43,   // 28mm wide
-        dept: margin + 71,   // 20mm wide
-        year: margin + 91,   // 20mm wide
-        sig:  margin + 111,  // rest = 210-15-111 = 84mm wide ← much bigger
+        num:  margin,
+        name: margin + 8,
+        roll: margin + 46,
+        dept: margin + 76,
+        year: margin + 98,
+        sig:  margin + 118,  // signature gets 210-15-118 = 77mm
       }
-      const sigColW = pageW - margin - col.sig  // ~84mm
-      const rowH    = 30  // taller rows so signature is bigger
-      const headerH = 8
+      const sigColW = pageW - margin - col.sig  // ~77mm
 
-      // ── Page header ──────────────────────────────────────────────────────
+      // ── PAGE 1: Cover / Intro ─────────────────────────────────────────────
+      // Full-width blue header
       doc.setFillColor(30, 64, 175)
-      doc.rect(0, 0, pageW, 38, 'F')
+      doc.rect(0, 0, pageW, 50, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(16)
+      doc.setFontSize(22)
       doc.setFont('helvetica', 'bold')
-      doc.text('Student Representation', pageW / 2, 14, { align: 'center' })
-      doc.text('Regarding the Compulsory Uniform Policy', pageW / 2, 23, { align: 'center' })
-      doc.setFontSize(10)
+      doc.text('Student Representation', pageW / 2, 22, { align: 'center' })
+      doc.setFontSize(14)
+      doc.text('Regarding the Compulsory Uniform Policy', pageW / 2, 34, { align: 'center' })
+      doc.setFontSize(11)
       doc.setFont('helvetica', 'normal')
-      doc.text(`Total Signatures: ${data.length}`, pageW / 2, 32, { align: 'center' })
+      doc.text(`Total Signatures: ${data.length}`, pageW / 2, 44, { align: 'center' })
 
-      // ── Statement ────────────────────────────────────────────────────────
+      // Statement box
+      doc.setFillColor(239, 246, 255)
+      doc.setDrawColor(147, 197, 253)
+      doc.roundedRect(margin, 60, pageW - margin * 2, 70, 3, 3, 'FD')
+      doc.setTextColor(30, 64, 175)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Representation Statement', margin + 5, 71)
       doc.setTextColor(40, 40, 40)
-      doc.setFontSize(8.5)
+      doc.setFontSize(9)
       doc.setFont('helvetica', 'italic')
       const statement =
         'We, the undersigned students, respectfully express our concerns regarding the recently introduced ' +
         'compulsory uniform policy. We believe that the implementation of this policy may not reflect the ' +
-        'preferences, comfort, practical considerations, and financial situations of all students. By signing ' +
-        'below, we acknowledge our support for submitting a formal representation to the college administration ' +
-        'requesting a review, discussion, and reconsideration of the compulsory uniform requirement.'
-      const stLines = doc.splitTextToSize(statement, pageW - margin * 2)
-      doc.text(stLines, margin, 46)
+        'preferences, comfort, practical considerations, and financial situations of all students.\n\n' +
+        'By signing below, we acknowledge our support for submitting a formal representation to the college ' +
+        'administration requesting a review, discussion, and reconsideration of the compulsory uniform ' +
+        'requirement. Our intention is to communicate student feedback respectfully and constructively.'
+      const stLines = doc.splitTextToSize(statement, pageW - margin * 2 - 10)
+      doc.text(stLines, margin + 5, 79)
 
-      let y = 46 + stLines.length * 4 + 6
+      // Summary stats on cover
+      const stats = [
+        { label: 'Total Students', value: String(data.length) },
+        { label: 'Date Generated', value: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) },
+      ]
+      let sx = margin
+      stats.forEach(({ label, value }) => {
+        doc.setFillColor(30, 64, 175)
+        doc.roundedRect(sx, 142, 80, 22, 3, 3, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(16)
+        doc.setFont('helvetica', 'bold')
+        doc.text(value, sx + 40, 151, { align: 'center' })
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'normal')
+        doc.text(label, sx + 40, 158, { align: 'center' })
+        sx += 85
+      })
 
-      // ── Table header ─────────────────────────────────────────────────────
+      // ── PAGE 2+: Data pages (10 rows each) ───────────────────────────────
+      doc.addPage()
+      let y = topMargin
+
       function drawTableHeader() {
         doc.setFillColor(30, 64, 175)
         doc.rect(margin, y, pageW - margin * 2, headerH, 'F')
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(8)
         doc.setFont('helvetica', 'bold')
-        doc.text('#',          col.num  + 1, y + 5.5)
-        doc.text('Full Name',  col.name + 1, y + 5.5)
-        doc.text('Roll No.',   col.roll + 1, y + 5.5)
-        doc.text('Dept',       col.dept + 1, y + 5.5)
-        doc.text('Year',       col.year + 1, y + 5.5)
-        doc.text('Signature',  col.sig  + 1, y + 5.5)
+        doc.text('#',           col.num  + 1, y + 5.5)
+        doc.text('Full Name',   col.name + 1, y + 5.5)
+        doc.text('Roll No.',    col.roll + 1, y + 5.5)
+        doc.text('Dept',        col.dept + 1, y + 5.5)
+        doc.text('Year',        col.year + 1, y + 5.5)
+        doc.text('Signature',   col.sig  + 1, y + 5.5)
         y += headerH
       }
 
       drawTableHeader()
 
-      // ── Rows ─────────────────────────────────────────────────────────────
       for (let i = 0; i < data.length; i++) {
         const row    = data[i]
         const sigImg = signatureImages[i]
 
-        if (y + rowH > pageH - 12) {
+        // New page when 10 rows filled
+        if (y + rowH > pageH - footer) {
           doc.addPage()
-          y = 15
+          y = topMargin
           drawTableHeader()
         }
 
-        // Alternating bg
+        // Alternating background
         if (i % 2 === 0) {
-          doc.setFillColor(248, 250, 252)
+          doc.setFillColor(245, 248, 255)
           doc.rect(margin, y, pageW - margin * 2, rowH, 'F')
         }
 
         // Row border
-        doc.setDrawColor(220, 220, 220)
+        doc.setDrawColor(210, 220, 240)
         doc.rect(margin, y, pageW - margin * 2, rowH, 'S')
 
-        // Text cells
-        doc.setTextColor(50, 50, 50)
+        // Text
+        doc.setTextColor(40, 40, 40)
         doc.setFontSize(7.5)
         doc.setFont('helvetica', 'normal')
         const textY = y + rowH / 2 + 1
 
         doc.text(String(i + 1),               col.num  + 1, textY)
-        doc.text(truncate(row.full_name, 22),  col.name + 1, textY)
+        doc.text(truncate(row.full_name, 20),  col.name + 1, textY)
         doc.text(row.roll_number,              col.roll + 1, textY)
         doc.text(row.department,               col.dept + 1, textY)
         doc.text(row.year,                     col.year + 1, textY)
 
-        // Signature — compressed JPEG, large & clear
+        // Signature image — large and clear
         if (sigImg) {
-          doc.addImage(sigImg, 'JPEG', col.sig + 1, y + 2, sigColW - 3, rowH - 4)
+          doc.addImage(sigImg, 'JPEG', col.sig + 2, y + 2, sigColW - 4, rowH - 4)
         } else {
           doc.setTextColor(180, 180, 180)
           doc.setFontSize(7)
-          doc.text('(unavailable)', col.sig + 1, textY)
+          doc.text('(unavailable)', col.sig + 2, textY)
         }
 
         y += rowH
       }
 
-      // ── Page numbers ─────────────────────────────────────────────────────
-      const pageCount = (doc as any).internal.getNumberOfPages()
-      for (let p = 1; p <= pageCount; p++) {
+      // ── Page numbers on all pages except cover ────────────────────────────
+      const totalPages = (doc as any).internal.getNumberOfPages()
+      for (let p = 2; p <= totalPages; p++) {
         doc.setPage(p)
         doc.setFontSize(7.5)
         doc.setTextColor(160, 160, 160)
         doc.text(
-          `Page ${p} of ${pageCount}  ·  Student Representation Portal`,
-          pageW / 2, pageH - 4, { align: 'center' }
+          `Page ${p - 1} of ${totalPages - 1}  ·  Student Representation Portal`,
+          pageW / 2, pageH - 3, { align: 'center' }
         )
       }
 
