@@ -13,20 +13,36 @@ interface Submission {
   created_at: string
 }
 
-async function fetchImageAsBase64(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const blob = await res.blob()
-    return await new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => resolve(null)
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return null
-  }
+// Fetch image and compress it via canvas → small JPEG (much smaller than PNG)
+async function fetchCompressedImage(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        // Draw at fixed small size — enough to be clear in PDF
+        const canvas = document.createElement('canvas')
+        canvas.width  = 300
+        canvas.height = 90
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        // Scale to fit
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+        const w = img.width  * scale
+        const h = img.height * scale
+        const x = (canvas.width  - w) / 2
+        const y = (canvas.height - h) / 2
+        ctx.drawImage(img, x, y, w, h)
+        // Export as JPEG at 60% quality — small but readable
+        resolve(canvas.toDataURL('image/jpeg', 0.6))
+      } catch {
+        resolve(null)
+      }
+    }
+    img.onerror = () => resolve(null)
+    img.src = url + '?t=' + Date.now() // cache bust for CORS
+  })
 }
 
 function truncate(str: string, max: number) {
@@ -34,16 +50,15 @@ function truncate(str: string, max: number) {
 }
 
 export default function PdfExportButton() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
   const [progress, setProgress] = useState('')
 
   async function handleExport() {
     setLoading(true)
-    setProgress('Fetching records...')
-
     try {
-      // Fetch all submissions
-      const res = await fetch('/api/admin/submissions?limit=10000&page=1')
+      // 1. Fetch all records
+      setProgress('Fetching records...')
+      const res  = await fetch('/api/admin/submissions?limit=10000&page=1')
       const json = await res.json()
       const data: Submission[] = json.data || []
 
@@ -52,16 +67,22 @@ export default function PdfExportButton() {
         return
       }
 
-      // Fetch all signatures in parallel in the browser
-      setProgress(`Loading ${data.length} signatures...`)
-      const signatureImages = await Promise.all(
-        data.map((row) => fetchImageAsBase64(row.signature_url))
-      )
+      // 2. Compress images in batches of 50 (prevents browser tab from freezing)
+      const BATCH = 50
+      const signatureImages: (string | null)[] = []
 
-      setProgress('Generating PDF...')
+      for (let b = 0; b < data.length; b += BATCH) {
+        const batch = data.slice(b, b + BATCH)
+        setProgress(`Loading signatures ${b + 1}–${Math.min(b + BATCH, data.length)} of ${data.length}...`)
+        const results = await Promise.all(batch.map(r => fetchCompressedImage(r.signature_url)))
+        signatureImages.push(...results)
+        // Small yield so browser stays responsive
+        await new Promise(r => setTimeout(r, 10))
+      }
 
-      // Build PDF
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      // 3. Build PDF
+      setProgress('Building PDF...')
+      const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageW = 210
       const pageH = 297
       const margin = 15
@@ -75,10 +96,10 @@ export default function PdfExportButton() {
         sig:  margin + 148,
       }
       const sigColW = pageW - margin - col.sig
-      const rowH    = 24
+      const rowH    = 22
       const headerH = 8
 
-      // Header
+      // ── Page header ──────────────────────────────────────────────────────
       doc.setFillColor(30, 64, 175)
       doc.rect(0, 0, pageW, 38, 'F')
       doc.setTextColor(255, 255, 255)
@@ -90,7 +111,7 @@ export default function PdfExportButton() {
       doc.setFont('helvetica', 'normal')
       doc.text(`Total Signatures: ${data.length}`, pageW / 2, 32, { align: 'center' })
 
-      // Statement
+      // ── Statement ────────────────────────────────────────────────────────
       doc.setTextColor(40, 40, 40)
       doc.setFontSize(8.5)
       doc.setFont('helvetica', 'italic')
@@ -105,6 +126,7 @@ export default function PdfExportButton() {
 
       let y = 46 + stLines.length * 4 + 6
 
+      // ── Table header ─────────────────────────────────────────────────────
       function drawTableHeader() {
         doc.setFillColor(30, 64, 175)
         doc.rect(margin, y, pageW - margin * 2, headerH, 'F')
@@ -122,9 +144,10 @@ export default function PdfExportButton() {
 
       drawTableHeader()
 
+      // ── Rows ─────────────────────────────────────────────────────────────
       for (let i = 0; i < data.length; i++) {
-        const row = data[i]
-        const sigBase64 = signatureImages[i]
+        const row    = data[i]
+        const sigImg = signatureImages[i]
 
         if (y + rowH > pageH - 12) {
           doc.addPage()
@@ -132,7 +155,7 @@ export default function PdfExportButton() {
           drawTableHeader()
         }
 
-        // Alternating row bg
+        // Alternating bg
         if (i % 2 === 0) {
           doc.setFillColor(248, 250, 252)
           doc.rect(margin, y, pageW - margin * 2, rowH, 'F')
@@ -142,21 +165,21 @@ export default function PdfExportButton() {
         doc.setDrawColor(220, 220, 220)
         doc.rect(margin, y, pageW - margin * 2, rowH, 'S')
 
-        // Text
+        // Text cells
         doc.setTextColor(50, 50, 50)
         doc.setFontSize(7.5)
         doc.setFont('helvetica', 'normal')
         const textY = y + rowH / 2 + 1
 
-        doc.text(String(i + 1),                  col.num  + 1, textY)
-        doc.text(truncate(row.full_name, 22),     col.name + 1, textY)
-        doc.text(row.roll_number,                 col.roll + 1, textY)
-        doc.text(row.department,                  col.dept + 1, textY)
-        doc.text(row.year,                        col.year + 1, textY)
+        doc.text(String(i + 1),               col.num  + 1, textY)
+        doc.text(truncate(row.full_name, 22),  col.name + 1, textY)
+        doc.text(row.roll_number,              col.roll + 1, textY)
+        doc.text(row.department,               col.dept + 1, textY)
+        doc.text(row.year,                     col.year + 1, textY)
 
-        // Signature image — large and clear
-        if (sigBase64) {
-          doc.addImage(sigBase64, 'PNG', col.sig + 1, y + 2, sigColW - 3, rowH - 4)
+        // Signature — compressed JPEG, large & clear
+        if (sigImg) {
+          doc.addImage(sigImg, 'JPEG', col.sig + 1, y + 2, sigColW - 3, rowH - 4)
         } else {
           doc.setTextColor(180, 180, 180)
           doc.setFontSize(7)
@@ -166,7 +189,7 @@ export default function PdfExportButton() {
         y += rowH
       }
 
-      // Page numbers
+      // ── Page numbers ─────────────────────────────────────────────────────
       const pageCount = (doc as any).internal.getNumberOfPages()
       for (let p = 1; p <= pageCount; p++) {
         doc.setPage(p)
@@ -178,9 +201,11 @@ export default function PdfExportButton() {
         )
       }
 
+      setProgress('Saving PDF...')
       doc.save(`student_representation_${Date.now()}.pdf`)
+
     } catch (err) {
-      console.error(err)
+      console.error('PDF error:', err)
       alert('PDF generation failed. Please try again.')
     } finally {
       setLoading(false)
@@ -192,13 +217,13 @@ export default function PdfExportButton() {
     <button
       onClick={handleExport}
       disabled={loading}
-      className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all text-red-700 bg-red-50 hover:bg-red-100 border-red-200 disabled:opacity-50"
+      className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all text-red-700 bg-red-50 hover:bg-red-100 border-red-200 disabled:opacity-50 min-w-[130px]"
     >
       {loading ? (
-        <>
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-xs">{progress || 'Generating...'}</span>
-        </>
+        <span className="flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+          <span className="text-xs truncate max-w-[200px]">{progress || 'Generating...'}</span>
+        </span>
       ) : (
         <>
           <FileText className="w-4 h-4" />
